@@ -209,7 +209,7 @@ static int display_disk_list(list_disk_t *list_disk, const int testdisk_mode,
 }
 
 
-int main( int argc, char **argv )
+static int main( int argc, char **argv )
 {
   int i;
 #ifdef SUDO_BIN
