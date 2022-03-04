@@ -2,25 +2,50 @@
 #include <string.h>
 #include <stddef.h>
 #include <stdlib.h>
-#include "common.h"
+#include "./common.h"
 #include "./handler_component/handler_component.h"
 #include "./log/log.h"
 
-#define IN_RANGE(value, min, max) (((value)>(min))&&((value)<(max))?EXIT_SUCCESS:EXIT_FAILURE)
+#define CALLOC_WITH_CHECK(POINTER, POINTER_TYPE, NUM, SIZE)  (POINTER)=POINTER_TYPE calloc((NUM),(SIZE));\
+                                                          if(NULL == (POINTER))\
+                                                          {return EXIT_FAILURE;}
+#define FREE_WITH_CHECK(POINTER) if(NULL != (POINTER))\
+                                 {free(POINTER);}\
+                                 else\
+                                 {return EXIT_FAILURE;}
 
-// 定义全局数据恢复上下文
-dataRec_Context *g_dataRec_Ctx = NULL;
+// 定义我的数据上下文
+my_Data_Context *g_my_Data_Ctx = NULL;
 
-void Data_Cutter(char *data, int datasize)
+void File_Info_Clear(void)
 {
-    strcpy(data+datasize, "\0");
-
-    return;
+    data_Recovery_Context *data_Rec_Ctx = g_my_Data_Ctx->data_Rec_Ctx;
+    undelete_File_Context *undelete_File_Ctx = g_my_Data_Ctx->testdisk_Ctx->undelete_File_Ctx;
+    
+    memset(data_Rec_Ctx->file_Ctx->info, 0, FILE_INFO_NUM*sizeof(file_Info));
 }
 
-void Data_Cleaner(char *data, int datasize)
+static void Server_Context_Clear(void)
 {
-    memset(data, datasize, sizeof(char));
+    server_Context *server_Ctx =g_my_Data_Ctx->server_Ctx;
+
+    // 清空server环境
+    // 清空接收环境
+    memset(server_Ctx->receive_Ctx->receive_Buffer, 0, RECEIVE_BUFFER_SIZE);
+    strcpy(server_Ctx->receive_Ctx->datarec, " ");
+    strcpy(server_Ctx->receive_Ctx->action,  " ");
+    strcpy(server_Ctx->receive_Ctx->command, " ");
+    server_Ctx->receive_Ctx->command_ID = 0;
+    memset(server_Ctx->receive_Ctx->param, 0, sizeof(server_Ctx->receive_Ctx->param));
+    server_Ctx->receive_Ctx->param_Num = 0;
+
+    // 清空响应环境
+    memset(server_Ctx->respond_Ctx->respond_Buffer, 0, RESPONSE_BUFFER_SIZE);
+}
+
+void Data_Cleaner(void)
+{
+    Server_Context_Clear();
 
     return;
 }
@@ -72,17 +97,21 @@ int Array_ID_Matcher(const void *match_Member, const int match_Member_Len, const
         (NULL == (array_Member)) &&
         (0 == (array_Member_Len & array_Len)))
     {
+        Log_Debug("Match Fail, Something Check Fail\n");
+
         return -1;
     }
     
     // 将数组转化成通用数组（可以按字节读取）
     general_Array_Member = (char *)array_Member;
 
+    // 开始匹配
     for (; i<array_Len; ++i)
     {
         if (0 == memcmp(match_Member, general_Array_Member, match_Member_Len+1))
         {
             Log_Debug("Match Success, Command ID Is %d\n", i);
+
             return i;
         }
 
@@ -95,136 +124,182 @@ int Array_ID_Matcher(const void *match_Member, const int match_Member_Len, const
     return -1;
 }
 
-int DataRec_Context_Init(void)
+char *Get_Action(void)
 {
-    // 初始化数据恢复结构体
-    if (NULL == g_dataRec_Ctx)
-    {
-        g_dataRec_Ctx = (dataRec_Context *)calloc(1, sizeof(dataRec_Context));
-        if (NULL == g_dataRec_Ctx)
-        {
-            Log_Debug("DataRec_Context_Init: g_dataRec_Ctx Creat Fail\n"); 
+    receive_Context *receive_Ctx = g_my_Data_Ctx->server_Ctx->receive_Ctx;
 
-            return EXIT_FAILURE;
-        }
+    return receive_Ctx->action;
+}
+
+unsigned int Get_Param_Num(void)
+{
+    receive_Context *receive_Ctx = g_my_Data_Ctx->server_Ctx->receive_Ctx;
+
+    return receive_Ctx->param_Num;
+}
+
+char *Get_Param(unsigned int param_No)
+{
+    receive_Context *receive_Ctx = g_my_Data_Ctx->server_Ctx->receive_Ctx;
+
+    if ((0 != Get_Param_Num()) && (param_No>=0) && (param_No<=Get_Param_Num()))
+    {
+        return receive_Ctx->param[param_No];
     }
 
-    // 初始化server回传Buffer
-    if (NULL == g_dataRec_Ctx->mg_websocket_write_Buffer)
-    {
-        size_t error_Info_Buffer_Size = 2048;
-        g_dataRec_Ctx->mg_websocket_write_Buffer = (error_Info_Buffer *)calloc(1, error_Info_Buffer_Size);
-        if (NULL == g_dataRec_Ctx->mg_websocket_write_Buffer)
-        {
-            Log_Debug("DataRec_Context_Init: mg_websocket_write_Buffer Creat Fail\n"); 
+    return NULL;
+}
 
-            return EXIT_FAILURE;
-        }
-    }
+static int Server_Context_Init(void)
+{
+    // 初始化服务器环境
+    CALLOC_WITH_CHECK(g_my_Data_Ctx->server_Ctx, (server_Context *), 1, sizeof(server_Context));
 
-    // 初始化testdisk结构体
-    if (NULL == g_dataRec_Ctx->testdisk_Ctx)
-    {
-        g_dataRec_Ctx->testdisk_Ctx = (testdisk_Context *)calloc(1, sizeof(testdisk_Context));
-        if (NULL == g_dataRec_Ctx->testdisk_Ctx)
-        {
-            Log_Debug("DataRec_Context_Init: mg_websocket_write_Buffer Creat Fail\n"); 
+    // 初始化数据接收环境
+    CALLOC_WITH_CHECK(g_my_Data_Ctx->server_Ctx->receive_Ctx, (receive_Context *), 1, sizeof(receive_Context));
 
-            return EXIT_FAILURE;
-        }
-    }
+    // 初始化数据接收buffer
+    CALLOC_WITH_CHECK(g_my_Data_Ctx->server_Ctx->receive_Ctx->receive_Buffer, (char *), RECEIVE_BUFFER_SIZE, sizeof(char));
 
-    // 初始化物理磁盘结构体
-    if (NULL == g_dataRec_Ctx->physical_Disk_Ctx)
-    {
-        g_dataRec_Ctx->physical_Disk_Ctx = (physical_Disk_Context *)calloc(1, sizeof(physical_Disk_Context));
-        if (NULL == g_dataRec_Ctx->physical_Disk_Ctx)
-        {
-            Log_Debug("DataRec_Context_Init: physical_Disk_Ctx Creat Fail\n"); 
+    // 初始化数据响应环境
+    CALLOC_WITH_CHECK(g_my_Data_Ctx->server_Ctx->respond_Ctx, (respond_Context *), 1, sizeof(respond_Context));
 
-            return EXIT_FAILURE;
-        }
-
-        // 初始化物理磁盘信息
-        if (NULL == g_dataRec_Ctx->physical_Disk_Ctx->info)
-        {
-            g_dataRec_Ctx->physical_Disk_Ctx->info = (physical_Disk_Info *)calloc(physical_Disk_Info_Num, sizeof(physical_Disk_Info));
-            if (NULL == g_dataRec_Ctx->physical_Disk_Ctx->info)
-            {
-                Log_Debug("DataRec_Context_Init: physical_Disk_Ctx Creat Fail\n"); 
-
-                return EXIT_FAILURE;
-            }
-        }
-    }
-
-    // 初始化逻辑磁盘结构体
-    if (NULL == g_dataRec_Ctx->logical_Disk_Ctx)
-    {
-        g_dataRec_Ctx->logical_Disk_Ctx = (logical_Disk_Context *)calloc(1, sizeof(logical_Disk_Context));
-        if (NULL == g_dataRec_Ctx->logical_Disk_Ctx)
-        {
-            Log_Debug("DataRec_Context_Init: logical_Disk_Ctx Creat Fail\n"); 
-
-            return EXIT_FAILURE;
-        }
-
-        // 初始化逻辑磁盘信息
-        if (NULL == g_dataRec_Ctx->logical_Disk_Ctx->info)
-        {
-            g_dataRec_Ctx->logical_Disk_Ctx->info = (logical_Disk_Info *)calloc(logical_Disk_Info_Num, sizeof(logical_Disk_Info));
-            if (NULL == g_dataRec_Ctx->logical_Disk_Ctx->info)
-            {
-                Log_Debug("DataRec_Context_Init: logical_Disk_Ctx Creat Fail\n"); 
-
-                return EXIT_FAILURE;
-            }
-        }
-    }
-
-    Log_Info("DataRec_Context_Init: Success\n"); 
+    // 初始化数据响应buffer
+    CALLOC_WITH_CHECK(g_my_Data_Ctx->server_Ctx->respond_Ctx->respond_Buffer, (char *), RESPONSE_BUFFER_SIZE, sizeof(char));
 
     return EXIT_SUCCESS;
 }
 
-int DataRec_Context_Free(void)
+static int Testdisk_Context_Init(void)
 {
-    if (NULL != g_dataRec_Ctx)
+    // 初始化testdisk环境
+    CALLOC_WITH_CHECK(g_my_Data_Ctx->testdisk_Ctx, (testdisk_Context *), 1, sizeof(testdisk_Context));
+
+    // 初始化testdisk快速恢复文件环境
+    CALLOC_WITH_CHECK(g_my_Data_Ctx->testdisk_Ctx->undelete_File_Ctx, (undelete_File_Context *), 1, sizeof(undelete_File_Context));
+
+    return EXIT_SUCCESS;
+}
+
+static int DataRec_Context_Init(void)
+{
+    // 初始化数据恢复环境
+    CALLOC_WITH_CHECK(g_my_Data_Ctx->data_Rec_Ctx, (data_Recovery_Context *), 1, sizeof(data_Recovery_Context));
+
+    // 初始化物理磁盘环境
+    CALLOC_WITH_CHECK(g_my_Data_Ctx->data_Rec_Ctx->physical_Disk_Ctx, (physical_Disk_Context *), 1, sizeof(physical_Disk_Context));
+
+    // 初始化物理磁盘信息
+    CALLOC_WITH_CHECK(g_my_Data_Ctx->data_Rec_Ctx->physical_Disk_Ctx->info, (physical_Disk_Info *), PHYSICAL_DISK_INFO_NUM, sizeof(physical_Disk_Info));
+
+    // 初始化逻辑磁盘环境
+    CALLOC_WITH_CHECK(g_my_Data_Ctx->data_Rec_Ctx->logical_Disk_Ctx, (logical_Disk_Context *), 1, sizeof(logical_Disk_Context));
+
+    // 初始化逻辑磁盘信息
+    CALLOC_WITH_CHECK(g_my_Data_Ctx->data_Rec_Ctx->logical_Disk_Ctx->info, (logical_Disk_Info *), LOGICAL_DISK_INFO_NUM, sizeof(logical_Disk_Info));
+
+    // 初始化文件列表环境
+    CALLOC_WITH_CHECK(g_my_Data_Ctx->data_Rec_Ctx->file_Ctx, (quick_Search_File_Context *), 1, sizeof(quick_Search_File_Context));
+
+    // 初始化文件列表信息
+    CALLOC_WITH_CHECK(g_my_Data_Ctx->data_Rec_Ctx->file_Ctx->info, (file_Info *), FILE_INFO_NUM, sizeof(file_Info));
+
+    return EXIT_SUCCESS;
+}
+
+static int DataRec_Context_Free(void)
+{
+    // 释放文件列表信息
+    FREE_WITH_CHECK(g_my_Data_Ctx->data_Rec_Ctx->file_Ctx->info);
+
+    // 释放文件列表结构体
+    FREE_WITH_CHECK(g_my_Data_Ctx->data_Rec_Ctx->file_Ctx);
+
+    // 释放逻辑磁盘信息
+    FREE_WITH_CHECK(g_my_Data_Ctx->data_Rec_Ctx->logical_Disk_Ctx->info);
+
+    // 释放逻辑磁盘结构体
+    FREE_WITH_CHECK(g_my_Data_Ctx->data_Rec_Ctx->logical_Disk_Ctx);
+
+    // 释放物理磁盘信息
+    FREE_WITH_CHECK(g_my_Data_Ctx->data_Rec_Ctx->physical_Disk_Ctx->info);
+
+    // 释放物理磁盘结构体
+    FREE_WITH_CHECK(g_my_Data_Ctx->data_Rec_Ctx->physical_Disk_Ctx);
+
+    FREE_WITH_CHECK(g_my_Data_Ctx->data_Rec_Ctx);
+
+    return EXIT_SUCCESS;
+}
+
+static int Testdisk_Context_Free(void)
+{
+    // 释放testdisk快速恢复文件结构体
+    FREE_WITH_CHECK(g_my_Data_Ctx->testdisk_Ctx->undelete_File_Ctx);
+
+    FREE_WITH_CHECK(g_my_Data_Ctx->testdisk_Ctx);
+
+    return EXIT_SUCCESS;
+}
+
+static int Server_Context_Free(void)
+{
+    // 释放数据接收buffer
+    FREE_WITH_CHECK(g_my_Data_Ctx->server_Ctx->receive_Ctx->receive_Buffer);
+
+    // 释放数据接收结构体
+    FREE_WITH_CHECK(g_my_Data_Ctx->server_Ctx->receive_Ctx);
+
+    // 释放数据响应buffer
+    FREE_WITH_CHECK(g_my_Data_Ctx->server_Ctx->respond_Ctx->respond_Buffer);
+
+    // 释放数据响应结构体
+    FREE_WITH_CHECK(g_my_Data_Ctx->server_Ctx->respond_Ctx);
+
+    FREE_WITH_CHECK(g_my_Data_Ctx->server_Ctx);
+
+    return EXIT_SUCCESS;
+}
+
+int My_Data_Context_Init(void)
+{
+    // 初始化我的数据结构体
+    CALLOC_WITH_CHECK(g_my_Data_Ctx, (my_Data_Context *), 1, sizeof(my_Data_Context));
+    if ((EXIT_SUCCESS == Server_Context_Init()) &&
+        (EXIT_SUCCESS == Testdisk_Context_Init()) &&
+        (EXIT_SUCCESS == DataRec_Context_Init()))
     {
-        // 清理server回传buffer
-        if (NULL != g_dataRec_Ctx->mg_websocket_write_Buffer)
-        {
-            free(g_dataRec_Ctx->mg_websocket_write_Buffer);
-        }
-
-        // 清理testdisk结构体
-        if (NULL != g_dataRec_Ctx->testdisk_Ctx)
-        {
-            free(g_dataRec_Ctx->testdisk_Ctx);
-        }
-
-        // 清理物理磁盘结构体   
-        if (NULL != g_dataRec_Ctx->physical_Disk_Ctx)
-        {
-            free(g_dataRec_Ctx->physical_Disk_Ctx);
-        }
-
-        // 清理逻辑磁盘结构体   
-        if (NULL != g_dataRec_Ctx->logical_Disk_Ctx)
-        {
-            free(g_dataRec_Ctx->logical_Disk_Ctx);
-        }
-
-        // 清理数据恢复结构体
-        free(g_dataRec_Ctx);
-
-        Log_Info("DataRec_Context_Free: Success\n"); 
+        Log_Info("My_Data_Context_Init: Success\n"); 
 
         return EXIT_SUCCESS;
     }
+    else 
+    {
+        Log_Info("My_Data_Context_Init: Fail\n"); 
 
-    Log_Info("DataRec_Context_Free: Fail\n"); 
+        return EXIT_FAILURE;
+    }
+}
 
-    return EXIT_FAILURE;
+int My_Data_Context_Free(void)
+{
+    // 和初始化顺序相反
+    
+    // 释放我的数据结构体
+    if ((EXIT_SUCCESS == DataRec_Context_Init()) &&
+        (EXIT_SUCCESS == Testdisk_Context_Init()) &&
+        (EXIT_SUCCESS == Server_Context_Init()))
+    {
+        FREE_WITH_CHECK(g_my_Data_Ctx);
+        Log_Info("My_Data_Context_Free: Success\n"); 
+
+        return EXIT_SUCCESS;
+    }
+    else 
+    {
+        Log_Info("My_DataRec_Context_Free: Fail\n"); 
+
+        return EXIT_FAILURE;
+    }
 }
 

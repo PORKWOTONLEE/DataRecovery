@@ -33,7 +33,7 @@ int main(void)
     Log_Info("cjson lib : %s, civetweb lib : %s\n\n", cJSON_Version(), mg_version());
 
     // 初始化datarec环境
-    DataRec_Context_Init();
+    My_Data_Context_Init();
 
     // 初始化server环境
     Civetweb_Init(&ctx);
@@ -45,7 +45,7 @@ int main(void)
     Civetweb_Stop(ctx);
 
     // 清理datarec环境
-    DataRec_Context_Free();
+    My_Data_Context_Free();
 
     return EXIT_SUCCESS;
 }

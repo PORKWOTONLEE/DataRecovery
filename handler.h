@@ -4,35 +4,6 @@
 #include <stdio.h>
 #include "./server/civetweb/include/civetweb.h"
 
-// 错误码
-typedef enum 
-{
-    ERROR_NONE_OK = 0,
-    ERROR_COMMON_ERROE = 1,
-    ERROR_NOTHING_MATCH = 701,
-    ERROR_UNKNOW_CONTENT_TYPE,
-    ERROR_UPDATE_DISK_DATA_FAIL
-
-}error_Code;
-
-// 错误信息结构体
-typedef char error_Detail; 
-typedef struct 
-{
-    error_Code Code;
-    error_Detail Detail[50];
-
-}error_Info;
-
-// 响应信息
-typedef struct
-{
-    char name[50];
-    error_Code (*Function)(char *error_Buffer);
-
-}command_Info;
-
-
 /**
  * brief：处理server接收到的数据
  *

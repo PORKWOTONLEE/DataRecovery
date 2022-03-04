@@ -4,90 +4,186 @@
 #include <stdint.h>
 #include <time.h>
 #include "./libtestdisk/include/common.h"
+#include "./libtestdisk/include/dir_common.h"
 #include "./server/civetweb/include/civetweb.h"
 #include "./server/cjson/include/cJSON.h"
 
-#define physical_Disk_Info_Num 30
-#define logical_Disk_Info_Num  128
+#define RESPONSE_BUFFER_SIZE   4096
+#define RECEIVE_BUFFER_SIZE    100 
+#define PHYSICAL_DISK_NUM      30 
+#define PHYSICAL_DISK_INFO_NUM 30
+#define LOGICAL_DISK_INFO_NUM  128
+#define FILE_INFO_NUM          1000000
 
-// 逻辑磁盘上下文
+// 默认文件恢复路径
+#define DEFAULT_RECOVERY_FILE_PATH ".\\tmp"
+
+// 错误码
+typedef enum 
+{
+    ERROR_NONE_OK = 0,
+    ERROR_COMMON_ERROR = 1,
+    ERROR_UNKNOWN_DATA_TYPE = 701,
+    ERROR_ONLY_HEAD,
+    ERROR_UNKNOWN_DATA_HEAD,
+    ERROR_UNKNOWN_DATA_ACTION,
+    ERROR_UNKNOWN_DATA_COMMAND,
+    ERROR_UNKNOWN_DATA_PARAM,
+    ERROR_DONT_HAVE_SUCH_COMMAND
+
+}error_Code;
+
+// 错误信息
+typedef struct 
+{
+    error_Code Code;
+    char       Detail[50];
+
+}error_Info;
+
+// 响应信息
 typedef struct
 {
-    list_disk_t *physical_Disk_List;                        // 全局物理磁盘信息链表头
-    list_part_t *logical_Disk_List[physical_Disk_Info_Num]; // 全局逻辑磁盘信息链表头
+    char       name[50];
+    error_Code (*Function)(char *error_Buffer);
+
+}command_Info;
+
+// 数据接收环境
+typedef struct
+{
+    char *receive_Buffer; // 数据接收buffer
+    char datarec[10];     // datarec标记
+    char action[10];      // 动作
+    char command[30];     // 命令
+    char param[5][6];     // 参数
+    int  param_Num;       // 参数个数
+    int  command_ID;      // 命令ID
+
+}receive_Context;
+
+// 数据响应环境
+typedef struct
+{
+    error_Code result;          // 数据响应结果
+    char       *respond_Buffer; // 数据响应buffer
+
+}respond_Context;
+
+// server数据环境
+typedef struct
+{
+    receive_Context *receive_Ctx;
+    respond_Context *respond_Ctx;
+
+}server_Context;
+
+// 恢复文件结构体
+typedef struct
+{
+    file_info_t list; // 文件列表
+    dir_data_t  data; // 文件数据
+
+}undelete_File_Context;
+
+// testdisk数据环境
+typedef struct
+{
+    list_disk_t           *physical_Disk_List;                   // 物理磁盘信息链表头
+    list_part_t           *logical_Disk_List[PHYSICAL_DISK_NUM]; // 逻辑磁盘信息链表头数组
+    undelete_File_Context *undelete_File_Ctx;                    // 恢复文件结构体
 
 }testdisk_Context;
 
 // 物理磁盘信息
 typedef struct
 {
-   char No[20];
-   char name[30];
-   char size[20];
+    uint32_t no;       // 编号
+    char     name[30]; // 名称
+    uint64_t size;     // 容量
 
 }physical_Disk_Info;
 
 // 逻辑磁盘信息
 typedef struct
 {
-   char No[20];
-   char letter[5];
-   char name[20];
-   char size[20];
-   char file_System[30];
-   char file_System_Extra[30];
+    uint32_t no;                    // 编号
+    char     letter[2];             // 盘符
+    char     name[20];              // 名称
+    uint64_t size;                  // 容量
+    char     file_System[30];       // 文件系统
+    char     file_System_Extra[30]; // 文件系统额外信息
 
 }logical_Disk_Info;
 
-// 物理磁盘上下文
+// 文件信息
 typedef struct
 {
-    physical_Disk_Info *info; 
-    unsigned int total_Num;
-    unsigned int logDisk_Num_In_Per_phyDisk[physical_Disk_Info_Num]; // 单个物理磁盘所含逻辑磁盘数量
+    unsigned int no;         // 编号
+    char   path_Name[200];   // 路径/名称
+    unsigned int size;       // 大小 
+    uint64_t inode;          // inode
+    time_t last_Access_Time; // 最后访问时间
+    time_t last_Modify_Time; // 最后修改时间
+    time_t last_Change_Time; // 最后改变时间
+
+}file_Info;
+
+// 物理磁盘环境
+typedef struct
+{
+    physical_Disk_Info *info;                                         // 详细信息 
+    unsigned int       total_Num;                                     // 总数
+    unsigned int       logDisk_Num_In_Per_phyDisk[PHYSICAL_DISK_NUM]; // 单个物理磁盘所含逻辑磁盘数量
 
 }physical_Disk_Context;
 
-// 逻辑磁盘上下文
+// 逻辑磁盘环境
 typedef struct
 {
-    logical_Disk_Info *info;
-    unsigned int total_Num;
+    logical_Disk_Info *info;     // 详细信息
+    unsigned int      total_Num; // 总数
 
 }logical_Disk_Context;
 
-// 数据恢复上下文
-typedef char error_Info_Buffer;
+// 快速恢复文件环境
+typedef struct
+{
+    file_Info    *info;        // 详细信息
+    unsigned int total_Num;    // 文件总个数
+    unsigned int total_Page;   // 文件总页数
+    unsigned int current_Page; // 当前文件页数
+    char destination[200];     // 文件恢复目录
+
+}quick_Search_File_Context;
+
+// 数据恢复环境
+typedef struct
+{
+    physical_Disk_Context *physical_Disk_Ctx;
+    logical_Disk_Context  *logical_Disk_Ctx;
+    quick_Search_File_Context *file_Ctx;
+
+}data_Recovery_Context;
+
+// 我的数据环境
 typedef struct 
 {
-    // 信息回传buffer
-    error_Info_Buffer *mg_websocket_write_Buffer;
+    server_Context        *server_Ctx;
+    testdisk_Context      *testdisk_Ctx;
+    data_Recovery_Context *data_Rec_Ctx;
 
-    // testdisk数据 
-    testdisk_Context* testdisk_Ctx;
-
-    physical_Disk_Context *physical_Disk_Ctx;
-
-    logical_Disk_Context *logical_Disk_Ctx;
-
-}dataRec_Context;
+}my_Data_Context;
 
 /**
- * brief：在字符串data末尾添加'\0'
- *
- * param：data     字符串数据
- * param：datasize 字符串长度
+ * brief：清空文件夹数据
  */
-void Data_Cutter(char *data, int datasize);
-
+void File_Info_Clear(void);
 
 /**
  * brief：将data中datasize大小的数据置0
- *
- * param：data     数据
- * param：datasize 数据大小
  */
-void Data_Cleaner(char *data, int datasize);
+void Data_Cleaner(void);
 
 /**
  * brief：给数据大小添加单位
@@ -121,18 +217,41 @@ int Autoset_Arch_Type(disk_t *disk);
 int Array_ID_Matcher(const void *match_Member, const int match_Member_Len, const void *array, const int array_Member_Len, const int array_Len);
 
 /**
+ * brief：按序号获取server接收环境中解析到的动作
+ *
+ * return：set或get字符串的指针
+ */
+char *Get_Action(void);
+
+/**
+ * brief：获取参数个数
+ *
+ * return：参数个数
+ */
+unsigned int Get_Param_Num(void);
+
+/**
+ * brief：按序号获取server接收环境中的解析到的参数
+ *
+ * param：param_No 参数序号
+ *
+ * return：param_No对应参数
+ */
+char *Get_Param(unsigned int param_No);
+
+/**
  * brief：初始化数据恢复环境
  *
  * return：EXIT_SUCCESS成功或者EXIT_FAILURE失败
  */
-int DataRec_Context_Init(void);
+int My_Data_Context_Init(void);
 
 /**
  * brief：清理数据恢复环境
  *
  * return：EXIT_SUCCESS成功或者EXIT_FAILURE失败
  */
-int DataRec_Context_Free(void);
+int My_Data_Context_Free(void);
 
 #endif
 
