@@ -9,7 +9,7 @@
 
 #define DOCUMENT_ROOT "./Docs"
 #define PORT "8081"
-#define WS_URL "/WebsocketURL"
+#define WS_URL ""
 
 // 全局Websocket环境结构体
 typedef struct 
