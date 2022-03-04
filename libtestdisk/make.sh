@@ -38,7 +38,7 @@ function FileNotExist()
 }
 
 # 主功能函数
-echo -e "【libtestdisk Building Script v1.3】"
+echo -e "【libtestdisk Building Script v1.4】"
 
 echo -e "\n【Prepare Task】"
 echo -e "-Ignore libtestdisk.a Change For Git\n-【Y/N Default:Y】\c"
@@ -118,6 +118,8 @@ then
             make static > /dev/null 2>&1
             FileExist ${TESTDISK_DIR}/src/libtestdisk.a
         else
+            make > /dev/null 2>&1
+            make static > /dev/null 2>&1
             echo -e "-Do Nothing"
         fi
     else
