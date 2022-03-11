@@ -1,10 +1,13 @@
 #ifndef __COMMON_H__
 #define __COMMON_H__
 
+#include <stdio.h>
 #include <stdint.h>
 #include <time.h>
-#include "./libtestdisk/include/common.h"
-#include "./libtestdisk/include/dir_common.h"
+#include "./libdatarec/include/common.h"
+#include "./libdatarec/include/dir_common.h"
+#include "./libdatarec/include/filegen.h"
+#include "./libdatarec/include/photorec.h"
 #include "./server/civetweb/include/civetweb.h"
 #include "./server/cjson/include/cJSON.h"
 
@@ -16,7 +19,8 @@
 #define FILE_INFO_NUM          1000000
 
 // 默认文件恢复路径
-#define DEFAULT_RECOVERY_FILE_PATH ".\\tmp"
+#define DEFAULT_QUICKSEARCH_FILE_PATH ".\\tmp\\quick"
+#define DEFAULT_DEEPSEARCH_FILE_PATH  ".\\tmp\\deep"
 
 // 错误码
 typedef enum 
@@ -84,14 +88,24 @@ typedef struct
     file_info_t list; // 文件列表
     dir_data_t  data; // 文件数据
 
-}undelete_File_Context;
+}testdisk_File_Context;
+
+// 恢复文件结构体
+typedef struct
+{
+    struct ph_param   param;   // 参数
+    struct ph_options options; // 选项
+    alloc_data_t      data;    // 数据
+
+}photorec_File_Context;
 
 // testdisk数据环境
 typedef struct
 {
     list_disk_t           *physical_Disk_List;                   // 物理磁盘信息链表头
     list_part_t           *logical_Disk_List[PHYSICAL_DISK_NUM]; // 逻辑磁盘信息链表头数组
-    undelete_File_Context *undelete_File_Ctx;                    // 恢复文件结构体
+    testdisk_File_Context *testdisk_File_Ctx;                    // testdisk恢复文件结构体
+    photorec_File_Context *photorec_File_Ctx;                    // photorec恢复文件结构体
 
 }testdisk_Context;
 
@@ -155,14 +169,14 @@ typedef struct
     unsigned int current_Page; // 当前文件页数
     char destination[200];     // 文件恢复目录
 
-}quick_Search_File_Context;
+}recovery_File_Context;
 
 // 数据恢复环境
 typedef struct
 {
     physical_Disk_Context *physical_Disk_Ctx;
     logical_Disk_Context  *logical_Disk_Ctx;
-    quick_Search_File_Context *file_Ctx;
+    recovery_File_Context *file_Ctx;
 
 }data_Recovery_Context;
 

@@ -2,12 +2,12 @@
 #include <string.h>
 #include "../common.h"
 #include "../log/log.h"
-#include "../libtestdisk/include/dir_common.h"
-#include "../libtestdisk/ntfsprogs/include/ntfs/volume.h"
-#include "../libtestdisk/include/datarec_inject.h"
+#include "../libdatarec/include/dir_common.h"
+#include "../libdatarec/ntfsprogs/include/ntfs/volume.h"
+#include "../libdatarec/include/datarec_inject.h"
 
 #define HAVE_LIBNTFS 1
-#include "../libtestdisk/include/ntfs_inc.h"
+#include "../libdatarec/include/ntfs_inc.h"
 
 #include "handler_component.h"
 
@@ -24,10 +24,10 @@ static int Update_Recovery_File_Path(char *error_Buffer)
     }
     else
     {
-        strcpy(data_Rec_Ctx->file_Ctx->destination, DEFAULT_RECOVERY_FILE_PATH);
+        strcpy(data_Rec_Ctx->file_Ctx->destination, DEFAULT_QUICKSEARCH_FILE_PATH);
     }
 
-    testdisk_Ctx->undelete_File_Ctx->data.local_dir = (char *)&(data_Rec_Ctx->file_Ctx->destination);
+    testdisk_Ctx->testdisk_File_Ctx->data.local_dir = (char *)&(data_Rec_Ctx->file_Ctx->destination);
 
     Log_Debug("Recovery_File_Path Set To %s\n", data_Rec_Ctx->file_Ctx->destination);
 
@@ -38,7 +38,7 @@ static int Recovery_File(char *error_Buffer)
 {
     data_Recovery_Context *data_Rec_Ctx = g_my_Data_Ctx->data_Rec_Ctx;
     testdisk_Context *testdisk_Ctx = g_my_Data_Ctx->testdisk_Ctx;
-    const struct ntfs_dir_struct *ls=(const struct ntfs_dir_struct *)testdisk_Ctx->undelete_File_Ctx->data.private_dir_data;
+    const struct ntfs_dir_struct *ls=(const struct ntfs_dir_struct *)testdisk_Ctx->testdisk_File_Ctx->data.private_dir_data;
     int result = 0;
 
     result = undelete_file(error_Buffer, ls->vol, data_Rec_Ctx->file_Ctx->info[atoi(Get_Param(0))].inode);

@@ -116,13 +116,14 @@ int main(void)
             printf("1.帮助\n");
             printf("2.更新磁盘列表\n");
             printf("3.获取磁盘列表\n");
-            printf("4.更新文件列表\n");
-            printf("5.获取文件列表\n");
-            printf("6.跳转到文件列表指定页数\n");
-            printf("7.跳转到文件列表上一页\n");
-            printf("8.跳转到文件列表下一页\n");
-            printf("9.设定文件恢复路径\n");
-            printf("10.按照文件序号（no）恢复指定文件\n");
+            printf("4.快速搜索文件列表\n");
+            printf("5.深度搜索文件列表\n");
+            printf("6.获取文件列表\n");
+            printf("7.跳转到文件列表指定页数\n");
+            printf("8.跳转到文件列表上一页\n");
+            printf("9.跳转到文件列表下一页\n");
+            printf("10.设定文件恢复路径\n");
+            printf("11.按照文件序号（no）恢复指定文件\n");
             printf("========================================\n");
             printf("请输入命令对应数字:");
             scanf("%s", &value);    
@@ -143,26 +144,33 @@ int main(void)
                     scanf("%d", &physical_Disk_No);    
                     printf("请输入逻辑磁盘序号（no）:");
                     scanf("%d", &logical_Disk_No);    
-                    sprintf(Send_buffer, "datarec$action=set$command=FileList$param=%d&param=%d", physical_Disk_No, logical_Disk_No);
+                    sprintf(Send_buffer, "datarec$action=set$command=FileList$param=0&param=%d&param=%d", physical_Disk_No, logical_Disk_No);
                     break;
                 case 5:
-                    sprintf(Send_buffer, "datarec$action=get$command=FileList");
+                    printf("请输入物理磁盘序号(no):");
+                    scanf("%d", &physical_Disk_No);    
+                    printf("请输入逻辑磁盘序号（no）:");
+                    scanf("%d", &logical_Disk_No);    
+                    sprintf(Send_buffer, "datarec$action=set$command=FileList$param=1&param=%d&param=%d", physical_Disk_No, logical_Disk_No);
                     break;
                 case 6:
+                    sprintf(Send_buffer, "datarec$action=get$command=FileList");
+                    break;
+                case 7:
                     printf("请输入页数:");
                     scanf("%d", &page_No);    
                     sprintf(Send_buffer, "datarec$action=get$command=FileList$param=0&param=%d", page_No);
                     break;
-                case 7:
+                case 8:
                     sprintf(Send_buffer, "datarec$action=get$command=FileList$param=1");
                     break;
-                case 8:
+                case 9:
                     sprintf(Send_buffer, "datarec$action=get$command=FileList$param=2");
                     break;
-                case 9:
+                case 10:
                     sprintf(Send_buffer, "datarec$action=set$command=File");
                     break;
-                case 10:
+                case 11:
                     printf("请输入文件序号:");
                     scanf("%d", &file_No);    
                     sprintf(Send_buffer, "datarec$action=get$command=File$param=%d", file_No);

@@ -20,7 +20,6 @@ my_Data_Context *g_my_Data_Ctx = NULL;
 void File_Info_Clear(void)
 {
     data_Recovery_Context *data_Rec_Ctx = g_my_Data_Ctx->data_Rec_Ctx;
-    undelete_File_Context *undelete_File_Ctx = g_my_Data_Ctx->testdisk_Ctx->undelete_File_Ctx;
     
     memset(data_Rec_Ctx->file_Ctx->info, 0, FILE_INFO_NUM*sizeof(file_Info));
 }
@@ -175,8 +174,11 @@ static int Testdisk_Context_Init(void)
     // 初始化testdisk环境
     CALLOC_WITH_CHECK(g_my_Data_Ctx->testdisk_Ctx, (testdisk_Context *), 1, sizeof(testdisk_Context));
 
-    // 初始化testdisk快速恢复文件环境
-    CALLOC_WITH_CHECK(g_my_Data_Ctx->testdisk_Ctx->undelete_File_Ctx, (undelete_File_Context *), 1, sizeof(undelete_File_Context));
+    // 初始化testdisk恢复文件环境
+    CALLOC_WITH_CHECK(g_my_Data_Ctx->testdisk_Ctx->testdisk_File_Ctx, (testdisk_File_Context *), 1, sizeof(testdisk_File_Context));
+
+    // 初始化photorec恢复文件环境
+    CALLOC_WITH_CHECK(g_my_Data_Ctx->testdisk_Ctx->photorec_File_Ctx, (photorec_File_Context*), 1, sizeof(photorec_File_Context));
 
     return EXIT_SUCCESS;
 }
@@ -199,7 +201,7 @@ static int DataRec_Context_Init(void)
     CALLOC_WITH_CHECK(g_my_Data_Ctx->data_Rec_Ctx->logical_Disk_Ctx->info, (logical_Disk_Info *), LOGICAL_DISK_INFO_NUM, sizeof(logical_Disk_Info));
 
     // 初始化文件列表环境
-    CALLOC_WITH_CHECK(g_my_Data_Ctx->data_Rec_Ctx->file_Ctx, (quick_Search_File_Context *), 1, sizeof(quick_Search_File_Context));
+    CALLOC_WITH_CHECK(g_my_Data_Ctx->data_Rec_Ctx->file_Ctx, (recovery_File_Context *), 1, sizeof(recovery_File_Context));
 
     // 初始化文件列表信息
     CALLOC_WITH_CHECK(g_my_Data_Ctx->data_Rec_Ctx->file_Ctx->info, (file_Info *), FILE_INFO_NUM, sizeof(file_Info));
@@ -234,8 +236,11 @@ static int DataRec_Context_Free(void)
 
 static int Testdisk_Context_Free(void)
 {
-    // 释放testdisk快速恢复文件结构体
-    FREE_WITH_CHECK(g_my_Data_Ctx->testdisk_Ctx->undelete_File_Ctx);
+    // 释放photorec恢复文件结构体
+    FREE_WITH_CHECK(g_my_Data_Ctx->testdisk_Ctx->photorec_File_Ctx);
+
+    // 释放testdisk恢复文件结构体
+    FREE_WITH_CHECK(g_my_Data_Ctx->testdisk_Ctx->testdisk_File_Ctx);
 
     FREE_WITH_CHECK(g_my_Data_Ctx->testdisk_Ctx);
 

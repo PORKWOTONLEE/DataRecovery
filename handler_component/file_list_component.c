@@ -1,30 +1,35 @@
+#include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <string.h>
+#include "../libdatarec/include/common.h"
+#include "../libdatarec/include/dir_common.h"
+#include "../libdatarec/include/filegen.h"
+#include "../libdatarec/include/photorec.h"
+#include "../libdatarec/testdisk/src/file_list.c"
+#include "../libdatarec/ntfsprogs/include/ntfs/volume.h"
+#include "../libdatarec/include/datarec_inject.h"
 #include "../common.h"
 #include "../log/log.h"
-#include "../libtestdisk/include/dir_common.h"
-#include "../libtestdisk/ntfsprogs/include/ntfs/volume.h"
-#include "../libtestdisk/include/datarec_inject.h"
 
 #define HAVE_LIBNTFS 1
-#include "../libtestdisk/include/ntfs_inc.h"
+#include "../libdatarec/include/ntfs_inc.h"
 
 #include "handler_component.h"
 
 extern my_Data_Context *g_my_Data_Ctx;
 
-static int Page_Control(char *error_Buffer)
+static error_Code Page_Control(char *error_Buffer)
 {
     data_Recovery_Context *data_Rec_Ctx = g_my_Data_Ctx->data_Rec_Ctx;
     
     // 根据第一个参数执行
     // （0）跳转到指定页数
-    Log_Debug("Here");
     if (0 == Get_Param_Num())
     {
         data_Rec_Ctx->file_Ctx->current_Page = 0;
 
-        return EXIT_SUCCESS;
+        return ERROR_NONE_OK;
     }
     else if (0 == atoi(Get_Param(0)))
     {
@@ -32,7 +37,7 @@ static int Page_Control(char *error_Buffer)
         {
             data_Rec_Ctx->file_Ctx->current_Page = atoi(Get_Param(1));
             
-            return EXIT_SUCCESS;
+            return ERROR_NONE_OK;
         }
     }
     //（1）前一页
@@ -42,7 +47,7 @@ static int Page_Control(char *error_Buffer)
         {
             sprintf(error_Buffer, "Out Of Page");
 
-            return EXIT_FAILURE;
+            return ERROR_COMMON_ERROR;
         }
         --data_Rec_Ctx->file_Ctx->current_Page;
     }
@@ -53,15 +58,17 @@ static int Page_Control(char *error_Buffer)
         {
             sprintf(error_Buffer, "Out Of Page");
 
-            return EXIT_FAILURE;
+            return ERROR_COMMON_ERROR;
         }
         ++data_Rec_Ctx->file_Ctx->current_Page;
     }
 
-    return EXIT_SUCCESS;
+    sprintf(error_Buffer, "Check Page Param ERROR");
+
+    return ERROR_COMMON_ERROR;
 }
 
-static int File_List_Serializer(char *error_Buffer) 
+static error_Code File_List_Serializer(char *error_Buffer) 
 {
     data_Recovery_Context *data_Rec_Ctx = g_my_Data_Ctx->data_Rec_Ctx;
     char *file_List_Serialized = NULL;
@@ -72,9 +79,9 @@ static int File_List_Serializer(char *error_Buffer)
     int max_File_No = 0;
 
     // 页面控制
-    if (EXIT_FAILURE == Page_Control(error_Buffer))
+    if (ERROR_NONE_OK != Page_Control(error_Buffer))
     {
-        return EXIT_FAILURE;
+        return ERROR_COMMON_ERROR;
     }
 
     file_List_Json = cJSON_CreateObject();
@@ -121,7 +128,7 @@ static int File_List_Serializer(char *error_Buffer)
     free(file_List_Serialized);
     cJSON_Delete(file_List_Json);
     
-    return EXIT_SUCCESS;
+    return ERROR_NONE_OK;
 }
 
 static disk_t *Access_Physical_Disk(int physical_Disk_No)
@@ -186,126 +193,128 @@ static partition_t *Accecc_Logical_Disk(int physical_Disk_No, int logical_Disk_N
     return NULL;
 }
 
-static int Scan_NTFS_Partition_Undelete_File(char *error_Buffer, disk_t *disk, const partition_t *partition)
+static error_Code Read_Partition_Data(char *error_Buffer, disk_t *disk, const partition_t *partition)
 {
-    undelete_File_Context *undelete_File_Ctx = g_my_Data_Ctx->testdisk_Ctx->undelete_File_Ctx;
+    testdisk_File_Context *testdisk_File_Ctx = g_my_Data_Ctx->testdisk_Ctx->testdisk_File_Ctx;
     struct ntfs_dir_struct *ls = NULL;
     int verbose = 1;
 
     // 检查文件数据和文件列表可用性
-    if (NULL != undelete_File_Ctx->list.list.next)
+    if (NULL != testdisk_File_Ctx->list.list.next)
     {
         Log_Debug("Clear List Data\n");
-        delete_list_file(&(undelete_File_Ctx->list));
+        delete_list_file(&testdisk_File_Ctx->list);
     }
-    if (NULL != undelete_File_Ctx->data.local_dir)
+    if (NULL != testdisk_File_Ctx->data.local_dir)
     {
         Log_Debug("Clear Dir Data\n");
-        undelete_File_Ctx->data.close(&(undelete_File_Ctx->data));
+        testdisk_File_Ctx->data.close(&testdisk_File_Ctx->data);
     }
 
     // NTFS分区文件夹数据初始化 
-    dir_partition_t result = dir_partition_ntfs_init(disk, partition, &(undelete_File_Ctx->data), verbose, 0);
+    dir_partition_t result = dir_partition_ntfs_init(disk, partition, &testdisk_File_Ctx->data, verbose, 0);
     
     // 设定路径
-    undelete_File_Ctx->data.local_dir = DEFAULT_RECOVERY_FILE_PATH;
+    testdisk_File_Ctx->data.local_dir = DEFAULT_QUICKSEARCH_FILE_PATH;
 
     switch(result) {
         case DIR_PART_ENOSYS:
             sprintf(error_Buffer, "Unsupport Filesystem");
 
-            return EXIT_FAILURE;
+            return ERROR_COMMON_ERROR;
             break;
         case DIR_PART_EIO:
             sprintf(error_Buffer, "Filesystem Was Damaged");
 
-            return EXIT_FAILURE;
+            return ERROR_COMMON_ERROR;
             break;
         default:
             {
-                ls = (struct ntfs_dir_struct *)(undelete_File_Ctx->data).private_dir_data;
-                TD_INIT_LIST_HEAD(&((undelete_File_Ctx->list).list));
+                ls = (struct ntfs_dir_struct *)(testdisk_File_Ctx->data).private_dir_data;
+                TD_INIT_LIST_HEAD(&testdisk_File_Ctx->list.list);
 
                 // 搜索丢失文件
-                Quick_Scan_Undelete_File(error_Buffer, ls->vol, &(undelete_File_Ctx->list));
-
+                Quick_Scan_File(error_Buffer, ls->vol, &testdisk_File_Ctx->list);
             }
             break;
     }
 
-    return EXIT_SUCCESS;
+    return ERROR_NONE_OK;
 }
 
-static int Update_DataRec_Ctx(void)
+static int Update_DataRec_Ctx(char *error_Buffer)
 {
-    undelete_File_Context *undelete_File_Ctx = g_my_Data_Ctx->testdisk_Ctx->undelete_File_Ctx;
+    testdisk_File_Context *testdisk_File_Ctx = g_my_Data_Ctx->testdisk_Ctx->testdisk_File_Ctx;
     data_Recovery_Context *data_Rec_Ctx = g_my_Data_Ctx->data_Rec_Ctx;
     const struct td_list_head *file_walker = NULL;
     unsigned int i = 0;
 
-    // 遍历文件夹
-    td_list_for_each(file_walker, &(undelete_File_Ctx->list.list))
+    if ((NULL!=data_Rec_Ctx) &&
+        (NULL!=data_Rec_Ctx->file_Ctx))
     {
-        const file_info_t *file_info = td_list_entry_const(file_walker, const file_info_t, list);
-
-        // 如果文件状态不是删除，则跳过
-        if (0 != (file_info->status & FILE_STATUS_DELETED))
+        // 遍历文件夹
+        td_list_for_each(file_walker, &testdisk_File_Ctx->list.list)
         {
-            continue;
+            const file_info_t *file_info = td_list_entry_const(file_walker, const file_info_t, list);
+
+            // 如果文件状态不是删除，则跳过
+            if (0 != (file_info->status & FILE_STATUS_DELETED))
+            {
+                continue;
+            }
+            else if (i > FILE_INFO_NUM)
+            {
+                break;
+            }
+
+            // 更新文件序号
+            data_Rec_Ctx->file_Ctx->info[i].no = i;
+
+            // 更新文件名称
+            strcpy(data_Rec_Ctx->file_Ctx->info[i].path_Name, file_info->name);
+
+            // 更新文件大小
+            data_Rec_Ctx->file_Ctx->info[i].size = file_info->st_size;
+
+            // 更新文件inode
+            data_Rec_Ctx->file_Ctx->info[i].inode = (uint64_t)file_info->st_ino;
+
+            // 更新文件上次访问时间
+            data_Rec_Ctx->file_Ctx->info[i].last_Access_Time = file_info->td_atime;
+
+            // 更新文件上次修改时间
+            data_Rec_Ctx->file_Ctx->info[i].last_Modify_Time = file_info->td_mtime;
+
+            // 更新文件上次改变时间
+            data_Rec_Ctx->file_Ctx->info[i].last_Change_Time = file_info->td_ctime;
+
+            ++i;
         }
-        else if (i > FILE_INFO_NUM)
-        {
-            break;
-        }
 
-        // 更新文件序号
-        data_Rec_Ctx->file_Ctx->info[i].no = i;
+        // 更新文件总数
+        data_Rec_Ctx->file_Ctx->total_Num = i;
 
-        // 更新文件名称
-        strcpy(data_Rec_Ctx->file_Ctx->info[i].path_Name, file_info->name);
+        // 更新文件总页数/每页10个文件
+        data_Rec_Ctx->file_Ctx->total_Page = (0 == i%10)?(i/10):(i/10+1);
 
-        // 更新文件大小
-        data_Rec_Ctx->file_Ctx->info[i].size = file_info->st_size;
+        // 更新文件当前页数
+        data_Rec_Ctx->file_Ctx->current_Page = 0;
 
-        // 更新文件inode
-        data_Rec_Ctx->file_Ctx->info[i].inode = (uint64_t)file_info->st_ino;
-
-        // 更新文件上次访问时间
-        data_Rec_Ctx->file_Ctx->info[i].last_Access_Time = file_info->td_atime;
-
-        // 更新文件上次修改时间
-        data_Rec_Ctx->file_Ctx->info[i].last_Modify_Time = file_info->td_mtime;
-
-        // 更新文件上次改变时间
-        data_Rec_Ctx->file_Ctx->info[i].last_Change_Time = file_info->td_ctime;
-
-        ++i;
+        return ERROR_NONE_OK;
     }
+    else
+    {
+        sprintf(error_Buffer, "data_Rec_Ctx/file_Ctx Is Null Pointer");
 
-    // 更新文件总数
-    data_Rec_Ctx->file_Ctx->total_Num = i;
-
-    // 更新文件总页数/每页10个文件
-    data_Rec_Ctx->file_Ctx->total_Page = (0 == i%10)?(i/10):(i/10+1);
-
-    // 更新文件当前页数
-    data_Rec_Ctx->file_Ctx->current_Page = 0;
-    
-    return EXIT_SUCCESS;
+        return ERROR_COMMON_ERROR;
+    }
 }
 
-static int Update_Testdisk_Ctx(char *error_Buffer)
+static error_Code Check_Partiton_Need_Redir(char *error_Buffer,
+                                     disk_t *disk,
+                                     partition_t *partition,
+                                     int (* Read_Partition_Data)(char*, disk_t*, partition_t*))
 {
-    disk_t      *disk      = Access_Physical_Disk(atoi(Get_Param(0))); 
-    partition_t *partition = Accecc_Logical_Disk(atoi(Get_Param(0)), atoi(Get_Param(1)));
-
-    if ((NULL == disk) || (NULL == partition))
-    {
-        sprintf(error_Buffer, "Please Check Physical Disk Or Logical Disk No");
-
-        return EXIT_FAILURE;
-    }
-
     if (partition->sb_offset!=0 && partition->sb_size>0)
     {
         // 逻辑磁盘重定向
@@ -320,13 +329,13 @@ static int Update_Testdisk_Ctx(char *error_Buffer)
            (is_part_ntfs(partition) && 
             partition->upart_type!=UP_EXFAT))
         {
-            return Scan_NTFS_Partition_Undelete_File(error_Buffer, disk, partition);
+            return Read_Partition_Data(error_Buffer, disk, partition);
         }
         else
         {
             sprintf(error_Buffer, "Unsupport Filesystem");
 
-            return EXIT_FAILURE;
+            return ERROR_COMMON_ERROR;
         }
 
         // 取消逻辑磁盘重定向
@@ -338,54 +347,164 @@ static int Update_Testdisk_Ctx(char *error_Buffer)
            (is_part_ntfs(partition) && 
            partition->upart_type!=UP_EXFAT))
         {
-            return Scan_NTFS_Partition_Undelete_File(error_Buffer, disk, partition);
+            return Read_Partition_Data(error_Buffer, disk, partition);
         }
         else
         {
             sprintf(error_Buffer, "Unsupport Filesystem");
 
-            return EXIT_FAILURE;
+            return ERROR_COMMON_ERROR;
         }
     }
 }
 
-static int Get_File_List(char *error_Buffer)
+static error_Code Update_Testdisk_Ctx(char *error_Buffer)
+{
+    disk_t      *disk      = Access_Physical_Disk(atoi(Get_Param(1))); 
+    partition_t *partition = Accecc_Logical_Disk(atoi(Get_Param(1)), atoi(Get_Param(2)));
+
+    if ((NULL == disk) || (NULL == partition))
+    {
+        sprintf(error_Buffer, "Please Check Physical Disk Or Logical Disk No");
+
+        return ERROR_COMMON_ERROR;
+    }
+
+    return Check_Partiton_Need_Redir(error_Buffer,
+                                     disk,
+                                     partition,
+                                     Read_Partition_Data);
+}
+
+static error_Code Get_File_List(char *error_Buffer)
 {
     return File_List_Serializer(error_Buffer);
 }
 
-
-static int Update_File_List(char *error_Buffer)
+static error_Code Update_QuickSearch_File_List(char *error_Buffer)
 {
-    if ((EXIT_SUCCESS == Update_Testdisk_Ctx(error_Buffer)) && 
-        (EXIT_SUCCESS == Update_DataRec_Ctx()))
+    if ((ERROR_NONE_OK == Update_Testdisk_Ctx(error_Buffer)) && 
+        (ERROR_NONE_OK == Update_DataRec_Ctx(error_Buffer)))
     {
-        sprintf(error_Buffer, "Update Success");
+        sprintf(error_Buffer, "Update QuickSearch File List Success");
 
-        return EXIT_SUCCESS;
+        return ERROR_NONE_OK;
     }
 
-    sprintf(error_Buffer, "Update Disk List Failure");
+    return ERROR_COMMON_ERROR;
+}
 
-    return EXIT_FAILURE;
+static error_Code Update_DeepSearch_File_List(char *error_Buffer)
+{
+    disk_t      *disk      = Access_Physical_Disk(atoi(Get_Param(1))); 
+    partition_t *partition = Accecc_Logical_Disk(atoi(Get_Param(1)), atoi(Get_Param(2)));
+
+    if ((NULL == disk) || (NULL == partition))
+    {
+        sprintf(error_Buffer, "Please Check Physical Disk Or Logical Disk No");
+
+        return ERROR_COMMON_ERROR;
+    }
+
+    photorec_File_Context *photorec_File_Ctx = g_my_Data_Ctx->testdisk_Ctx->photorec_File_Ctx;
+
+    // 初始化ph_param
+    photorec_File_Ctx->param.cmd_device            = disk->device;
+    photorec_File_Ctx->param.cmd_run               = NULL;
+    photorec_File_Ctx->param.disk                  = disk;
+    photorec_File_Ctx->param.partition             = partition;
+    photorec_File_Ctx->param.recup_dir             = DEFAULT_DEEPSEARCH_FILE_PATH;
+    photorec_File_Ctx->param.carve_free_space_only = 0;
+    photorec_File_Ctx->param.blocksize             = partition->blocksize;
+
+    // 初始化ph_options
+    photorec_File_Ctx->options.paranoid            = 1;
+    photorec_File_Ctx->options.keep_corrupted_file = 0;
+    photorec_File_Ctx->options.mode_ext2           = 0;
+    photorec_File_Ctx->options.expert              = 0;
+    photorec_File_Ctx->options.lowmem              = 0;
+    photorec_File_Ctx->options.verbose             = 0;
+    photorec_File_Ctx->options.list_file_format    = array_file_enable;
+
+    unsigned int array_file_list_len = sizeof(array_file_enable)/sizeof(file_enable_t);
+    for (int i=0; i<array_file_list_len; ++i)
+    {
+        if (NULL!=array_file_enable[i].file_hint)
+        {
+            if (NULL!=array_file_enable[i].file_hint->extension)
+            {
+                if (0 == strcmp(array_file_enable[i].file_hint->extension, "gif"))
+                {
+                    Log_Info("enable gif search\n");
+                    array_file_enable[i].enable = 1;
+                }
+            }
+            else
+            {
+                Log_Info("Extension Is NULL\n");
+            }
+        }
+        else
+        {
+            Log_Info("Hint Is NULL\n");
+        }
+    }
+
+    // 初始化data
+    TD_INIT_LIST_HEAD(&photorec_File_Ctx->data.list);
+    if (td_list_empty(&photorec_File_Ctx->data.list))
+    {
+        init_search_space(&photorec_File_Ctx->data, 
+                photorec_File_Ctx->param.disk, 
+                photorec_File_Ctx->param.partition);
+    }
+    if (photorec_File_Ctx->param.carve_free_space_only > 0)
+    {
+        photorec_File_Ctx->param.blocksize = remove_used_space(photorec_File_Ctx->param.disk,
+                                                               photorec_File_Ctx->param.partition,
+                                                               &photorec_File_Ctx->data);
+    }
+
+    Deep_Scan_File(error_Buffer,
+                   &photorec_File_Ctx->param,
+                   &photorec_File_Ctx->options,
+                   &photorec_File_Ctx->data);
+
+    free_list_search_space(&photorec_File_Ctx->data);
+
+    //sprintf(error_Buffer, "Update Success");
+
+    return ERROR_NONE_OK;
+}
+
+static error_Code Update_File_List(char *error_Buffer)
+{
+    if (0 == (atoi(Get_Param(0))))
+    {
+        return Update_QuickSearch_File_List(error_Buffer);
+    }
+    else if (1 == atoi((Get_Param(0))))
+    {
+        return Update_DeepSearch_File_List(error_Buffer);
+    }
+
+    sprintf(error_Buffer, "Check File List Param ERROR");
+
+    return ERROR_COMMON_ERROR;
 }
 
 error_Code File_List_Handler(char *error_Buffer)
 {
     if (0 == strcmp("set", Get_Action()))
     {
-        if (EXIT_SUCCESS == Update_File_List(error_Buffer))
-        {
-            return ERROR_NONE_OK;
-        }
+        return Update_File_List(error_Buffer);
     }
     else if (0 == strcmp("get", Get_Action()))
     {
-        if (EXIT_SUCCESS == Get_File_List(error_Buffer))
-        {
-            return ERROR_NONE_OK;
-        }
+        return Get_File_List(error_Buffer);
     }
+
+    sprintf(error_Buffer, "Check File List Action ERROR");
 
     return ERROR_COMMON_ERROR;
 }
