@@ -1,5 +1,7 @@
 #include "datarec_inject.h"
 
+extern my_Data_Context *g_my_Data_Ctx;
+
 struct filename {
     struct td_list_head list;		/* Previous/Next links */
     ntfschar	*uname;		/* Filename in unicode */
@@ -433,7 +435,7 @@ static void free_file(struct ufile *file)
     free(file);
 }
 
-static struct ufile * read_record(char *error_Buffer, ntfs_volume *vol, uint64_t record)
+static struct ufile * read_record(ntfs_volume *vol, uint64_t record)
 {
     ATTR_RECORD *attr10, *attr20, *attr90;
     struct ufile *file;
@@ -444,7 +446,7 @@ static struct ufile * read_record(char *error_Buffer, ntfs_volume *vol, uint64_t
 
     file = (struct ufile *)calloc(1, sizeof(*file));
     if (!file) {
-        sprintf(error_Buffer, "ERROR: Couldn't allocate memory in read_record()\n");
+        //"ERROR: Couldn't allocate memory in read_record()\n"
         return NULL;
     }
 
@@ -456,13 +458,13 @@ static struct ufile * read_record(char *error_Buffer, ntfs_volume *vol, uint64_t
 
     mft = ntfs_attr_open(vol->mft_ni, AT_DATA, AT_UNNAMED, 0);
     if (!mft) {
-        sprintf(error_Buffer, "ERROR: Couldn't open $MFT/$DATA\n");
+        //"ERROR: Couldn't open $MFT/$DATA\n"
         free_file(file);
         return NULL;
     }
 
     if (ntfs_attr_mst_pread(mft, vol->mft_record_size * record, 1, vol->mft_record_size, file->mft) < 1) {
-        sprintf(error_Buffer, "ERROR: Couldn't read MFT Record %llu.\n", (long long unsigned)record);
+        //"ERROR: Couldn't read MFT Record %llu.\n", (long long unsigned)record
         ntfs_attr_close(mft);
         free_file(file);
         return NULL;
@@ -475,8 +477,7 @@ static struct ufile * read_record(char *error_Buffer, ntfs_volume *vol, uint64_t
     attr20 = find_first_attribute(AT_ATTRIBUTE_LIST,	file->mft);
     attr90 = find_first_attribute(AT_INDEX_ROOT,		file->mft);
 
-    sprintf(error_Buffer, "Attributes present: %s %s %s.\n", attr10?"0x10":"",
-    attr20?"0x20":"", attr90?"0x90":"");
+    //"Attributes present: %s %s %s.\n", attr10?"0x10":"",attr20?"0x20":"", attr90?"0x90":""
 
     if (attr10) {
         STANDARD_INFORMATION *si;
@@ -490,10 +491,10 @@ static struct ufile * read_record(char *error_Buffer, ntfs_volume *vol, uint64_t
         file->directory = 1;
 
     if (get_filenames(file, vol) < 0) {
-        sprintf(error_Buffer, "ERROR: Couldn't get filenames.\n");
+        //"ERROR: Couldn't get filenames.\n"
     }
     if (get_data(file, vol) < 0) {
-        sprintf(error_Buffer, "ERROR: Couldn't get data streams.\n");
+        //"ERROR: Couldn't get data streams.\n"
     }
 
     return file;
@@ -525,7 +526,7 @@ static file_info_t *ufile_to_file_data(const struct ufile *file, const struct da
     return new_file;
 }
 
-int Quick_Scan_File(char *error_Buffer, ntfs_volume *vol, file_info_t *dir_list)
+int Quick_Scan_File(ntfs_volume *vol, file_info_t *dir_list)
 {
     uint64_t nr_mft_records;
     const unsigned int BUFSIZE = 8192;
@@ -538,7 +539,7 @@ int Quick_Scan_File(char *error_Buffer, ntfs_volume *vol, file_info_t *dir_list)
 
     if (!vol)
     {
-        sprintf(error_Buffer, "NTFS Volume Open Fail"); 
+        Set_Respond_Buffer("NTFS Volume Open Fail"); 
 
         return EXIT_FAILURE;
     }
@@ -546,7 +547,7 @@ int Quick_Scan_File(char *error_Buffer, ntfs_volume *vol, file_info_t *dir_list)
     attr = ntfs_attr_open(vol->mft_ni, AT_BITMAP, AT_UNNAMED, 0);
     if (!attr)
     {
-        sprintf(error_Buffer, "$MFT/$BITMAP Open Fail\n");
+        Set_Respond_Buffer("$MFT/$BITMAP Open Fail\n");
 
         return EXIT_FAILURE;
     }
@@ -576,7 +577,7 @@ int Quick_Scan_File(char *error_Buffer, ntfs_volume *vol, file_info_t *dir_list)
                     goto done;
                 if (b & 1)
                     continue;
-                file = read_record(error_Buffer, vol, (i+j)*8+k);
+                file = read_record(vol, (i+j)*8+k);
                 if (!file) {
                     continue;
                 }
@@ -677,7 +678,7 @@ static unsigned int write_data(int fd, const char *buffer,
     return result1 + result2;
 }
 
-int undelete_file(char *error_Buffer, ntfs_volume *vol, uint64_t inode)
+int undelete_file(ntfs_volume *vol, uint64_t inode)
 {
     char *buffer = NULL;
     unsigned int bufsize;
@@ -688,9 +689,9 @@ int undelete_file(char *error_Buffer, ntfs_volume *vol, uint64_t inode)
         return -2;
 
     /* try to get record */
-    file = read_record(error_Buffer, vol, inode);
+    file = read_record(vol, inode);
     if (!file || !file->mft) {
-        sprintf(error_Buffer, "Can't read info from mft record %llu.\n", (long long unsigned)inode);
+        Log_Debug("Can't read info from mft record %llu.\n", (long long unsigned)inode);
         return -2;
     }
 
@@ -703,7 +704,7 @@ int undelete_file(char *error_Buffer, ntfs_volume *vol, uint64_t inode)
      * listed as 0% recoverable even if successfully undeleted. +mabs
      */
     if (file->mft->flags & MFT_RECORD_IN_USE) {
-        sprintf(error_Buffer, "Record is in use by the mft\n");
+        Log_Debug("Record is in use by the mft\n");
         //log_error();
         free(buffer);
         free_file(file);
@@ -711,12 +712,12 @@ int undelete_file(char *error_Buffer, ntfs_volume *vol, uint64_t inode)
     }
 
     if (calc_percentage(file, vol) == 0) {
-        sprintf(error_Buffer, "File has no recoverable data.\n");
+        Log_Debug("File has no recoverable data.\n");
         goto free;
     }
 
     if (td_list_empty(&file->data)) {
-        sprintf(error_Buffer, "File has no data.  There is nothing to recover.\n");
+        Log_Debug("File has no data.  There is nothing to recover.\n");
         goto free;
     }
 
@@ -742,19 +743,19 @@ int undelete_file(char *error_Buffer, ntfs_volume *vol, uint64_t inode)
             int fd;
             fd = open_file(pathname);
             if (fd < 0) {
-                sprintf(error_Buffer, "Couldn't create file %s\n", pathname);
+                Log_Debug("Couldn't create file %s\n", pathname);
                 goto free;
             }
 
             //log_verbose("File has resident data.\n");
             if (write_data(fd, (const char *)d->data, d->size_data) < d->size_data) {
-                sprintf(error_Buffer, "Write failed\n");
+                Log_Debug("Write failed\n");
                 close(fd);
                 goto free;
             }
 
             if (close(fd) < 0) {
-                sprintf(error_Buffer, "Close failed\n");
+                Log_Debug("Close failed\n");
             }
         } else {
             int i;
@@ -763,30 +764,30 @@ int undelete_file(char *error_Buffer, ntfs_volume *vol, uint64_t inode)
             runlist_element *rl;
             rl = d->runlist;
             if (!rl) {
-                sprintf(error_Buffer, "File has no runlist, hence no data.\n");
+                Log_Debug("File has no runlist, hence no data.\n");
                 continue;
             }
 
             if (rl[0].length <= 0) {
-                sprintf(error_Buffer, "File has an empty runlist, hence no data.\n");
+                Log_Debug("File has an empty runlist, hence no data.\n");
                 continue;
             }
 
             fd = open_file(pathname);
             if (fd < 0) {
-                sprintf(error_Buffer, "Couldn't create output file %s\n", pathname);
+                Log_Debug("Couldn't create output file %s\n", pathname);
                 goto free;
             }
 
             if (rl[0].lcn == LCN_RL_NOT_MAPPED) {	/* extended mft record */
                 uint64_t k;
-                sprintf(error_Buffer, "Missing segment at beginning, %lld "
+                Log_Debug("Missing segment at beginning, %lld "
                         "clusters.\n",
                         (long long)rl[0].length);
                 memset(buffer, 0, bufsize);
                 for (k = 0; k < (uint64_t)rl[0].length * vol->cluster_size; k += bufsize) {
                     if (write_data(fd, buffer, bufsize) < bufsize) {
-                        sprintf(error_Buffer, "Write failed\n");
+                        Log_Debug("Write failed\n");
                         close(fd);
                         goto free;
                     }
@@ -800,13 +801,13 @@ int undelete_file(char *error_Buffer, ntfs_volume *vol, uint64_t inode)
 
                 if (rl[i].lcn == LCN_RL_NOT_MAPPED) {
                     uint64_t k;
-                    sprintf(error_Buffer, "Missing segment at end, "
+                    Log_Debug("Missing segment at end, "
                             "%lld clusters.\n",
                             (long long)rl[i].length);
                     memset(buffer, 0, bufsize);
                     for (k = 0; k < (uint64_t)rl[i].length * vol->cluster_size; k += bufsize) {
                         if (write_data(fd, buffer, bufsize) < bufsize) {
-                            sprintf(error_Buffer, "Write failed\n");
+                            Log_Debug("Write failed\n");
                             close(fd);
                             goto free;
                         }
@@ -817,11 +818,11 @@ int undelete_file(char *error_Buffer, ntfs_volume *vol, uint64_t inode)
 
                 if (rl[i].lcn == LCN_HOLE) {
                     uint64_t k;
-                    sprintf(error_Buffer, "File has a sparse section.\n");
+                    Log_Debug("File has a sparse section.\n");
                     memset(buffer, 0, bufsize);
                     for (k = 0; k < (uint64_t)rl[i].length * vol->cluster_size; k += bufsize) {
                         if (write_data(fd, buffer, bufsize) < bufsize) {
-                            sprintf(error_Buffer, "Write failed\n");
+                            Log_Debug("Write failed\n");
                             close(fd);
                             goto free;
                         }
@@ -850,12 +851,12 @@ int undelete_file(char *error_Buffer, ntfs_volume *vol, uint64_t inode)
 #endif
                     {
                         if (ntfs_cluster_read(vol, j, 1, buffer) < 1) {
-                            sprintf(error_Buffer, "Read failed\n");
+                            Log_Debug("Read failed\n");
                             close(fd);
                             goto free;
                         }
                         if (write_data(fd, buffer, bufsize) < bufsize) {
-                            sprintf(error_Buffer, "Write failed\n");
+                            Log_Debug("Write failed\n");
                             close(fd);
                             goto free;
                         }
@@ -881,14 +882,14 @@ int undelete_file(char *error_Buffer, ntfs_volume *vol, uint64_t inode)
                     cluster_count * (uint64_t)vol->cluster_size == d->size_alloc)
             {
                 if (ftruncate(fd, (off_t)d->size_data))
-                    sprintf(error_Buffer, "Truncation failed\n");
+                    Log_Debug("Truncation failed\n");
             }
             else
-                sprintf(error_Buffer, "Truncation not performed because file has an "
+                Log_Debug("Truncation not performed because file has an "
                         "inconsistent $MFT record.\n");
 
             if (close(fd) < 0) {
-                sprintf(error_Buffer, "Close failed\n");
+                Log_Debug("Close failed\n");
             }
 
         }

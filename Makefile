@@ -2,8 +2,8 @@ TARGET1=datarec.exe
 TARGET2=datarec_client.exe
 DATAREC_SRC=*.c ./log/*.c ./server/*.c ./handler_component/*.c
 DATAREC_CLIENT_SRC=./client/client.c
-TRD_INC=-Iserver/civetweb/include -Iserver/cjson/include -Ilibdatarec/include -Ilibdatarec/ntfsprogs/include/ntfs
-TRD_LIB=-Lserver/civetweb/lib -Lserver/cjson/lib -Llibdatarec/lib -Llibdatarec/ntfsprogs/libntfs/.libs -lcivetweb -lcjson -ldatarec -lntfs -lz
+TRD_INC=-Iserver/civetweb/include -Iserver/cjson/include -Ilibdatarec/include -Ilibdatarec/ntfsprogs/include/ntfs -Ilibdatarec/libjpeg/include -Ilibdatarec/libewf/include
+TRD_LIB=-Lserver/civetweb/lib -Lserver/cjson/lib -Llibdatarec/lib -Llibdatarec/ntfsprogs/libntfs/.libs -Llibdatarec/3rd_lib/libjpeg/lib -Llibdatarec/3rd_lib/libewf/lib -lcivetweb -lcjson -ldatarec -lntfs -ljpeg -lewf -lz
 VERBOSE=> /dev/null 2>&1
 
 $(TARGET1):${DATAREC_SRC}
@@ -12,7 +12,7 @@ $(TARGET1):${DATAREC_SRC}
 	@cp /bin/cygwin1.dll ./
 	@cp /bin/cygz.dll ./
 	@cp ./libdatarec/ntfsprogs/libntfs/.libs/cygntfs-10.dll ./
-	@gcc -g -o $(TARGET1) $^ ${TRD_INC} ${TRD_LIB} -Wl,--enable-stdcall-fixup
+	@gcc -g -O0 -o $(TARGET1) $^ ${TRD_INC} ${TRD_LIB} -Wl,--stack=52428800,--enable-stdcall-fixup
 	@echo "Builing Target Success"
 
 $(TARGET2):${DATAREC_CLIENT_SRC}

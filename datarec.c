@@ -17,9 +17,13 @@
  */
 
 #include <stdlib.h>
+#include <string.h>
+#include <stdbool.h>
 #include "common.h"
 #include "./server/server.h"
 #include "./log/log.h"
+
+extern my_Data_Context *g_my_Data_Ctx;
 
 int main(void)
 {
@@ -28,8 +32,16 @@ int main(void)
     int log_Mode = LOG_CREATE;
     int log_Errsv = 0;
 
+    if (true != IsProcessRunAsAdmin())
+    {
+        Run_As_Admin(); 
+
+        return 0;
+    }
+
     // 初始化Log
-    Log_Open(log_Name, log_Mode, &log_Errsv); Log_Info("DataRec Build By PORKWOTONLEE\n");
+    Log_Open(log_Name, log_Mode, &log_Errsv); 
+    Log_Info("DataRec Build By PORKWOTONLEE\n");
     Log_Info("cjson lib : %s, civetweb lib : %s\n\n", cJSON_Version(), mg_version());
 
     // 初始化datarec环境
@@ -39,7 +51,7 @@ int main(void)
     Civetweb_Init(&ctx);
     Civetweb_Set_Handler(ctx);
 
-    while ('q' == getchar());
+    while (0 != strcmp(Get_Action(), "exit"));
 
     // 清理server环境
     Civetweb_Stop(ctx);

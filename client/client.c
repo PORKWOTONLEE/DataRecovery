@@ -7,8 +7,6 @@
 
 #include "civetweb.h"
 
-static bool get_Response = true;
-
 struct tclient_data 
 {
 
@@ -29,8 +27,6 @@ static int websocket_client_data_handler(struct mg_connection *conn,
 	int is_text = ((flags & 0xf) == MG_WEBSOCKET_OPCODE_TEXT);
 	int is_bin = ((flags & 0xf) == MG_WEBSOCKET_OPCODE_BINARY);
 	int is_close = ((flags & 0xf) == MG_WEBSOCKET_OPCODE_CONNECTION_CLOSE);
-
-    get_Response = true;
 
 	if (is_text) {
         strcpy(data+data_len, "\0");
@@ -104,85 +100,109 @@ int main(void)
     unsigned int logical_Disk_No= 0;
     unsigned int page_No = 0;
     unsigned int file_No = 0;
+    char file_Extension[10] = {};
+    int file_Extension_Enable = 0;
+    char file_Recovery_Path[1024] = {};
     Send_buffer = (char *)calloc(50,50);
     while (1)
     {
-        if (true == get_Response)
+        Sleep(100);
+        printf("======================================================\n");
+        printf("命令列表                                             =\n");
+        printf("======================================================\n");
+        printf("1.datarec信息（程序状态，搜索停止符，搜索百分比等）  =\n");
+        printf("======================================================\n");
+        printf("2.更新磁盘列表                                       =\n");
+        printf("3.获取磁盘列表                                       =\n");
+        printf("======================================================\n");
+        printf("4.开始快速扫描                                       =\n");
+        printf("5.开始深度扫描                                       =\n");
+        printf("6.停止扫描                                           =\n");
+        printf("======================================================\n");
+        printf("7.获取快速扫描文件列表当前页                         =\n");
+        printf("8.获取快速扫描文件列表上一页                         =\n");
+        printf("9.获取快速扫描文件列表下一页                         =\n");
+        printf("10.获取快速扫描文件列表指定页                        =\n");
+        printf("======================================================\n");
+        printf("11.设置深度扫描文件类型                              =\n");
+        printf("======================================================\n");
+        printf("12.按照文件序号（no）获取快速扫描文件                =\n");
+        printf("13.设定快速扫描文件恢复路径                          =\n");
+        printf("======================================================\n");
+        printf("14.退出datarec程序                                   =\n");
+        printf("请输入命令对应数字:");
+        scanf("%s", &value);    
+        switch (atoi(&value))
         {
-            Sleep(100);
-            printf("========================================\n");
-            printf("命令列表\n");
-            printf("========================================\n");
-            printf("1.帮助\n");
-            printf("2.更新磁盘列表\n");
-            printf("3.获取磁盘列表\n");
-            printf("4.快速搜索文件列表\n");
-            printf("5.深度搜索文件列表\n");
-            printf("6.获取文件列表\n");
-            printf("7.跳转到文件列表指定页数\n");
-            printf("8.跳转到文件列表上一页\n");
-            printf("9.跳转到文件列表下一页\n");
-            printf("10.设定文件恢复路径\n");
-            printf("11.按照文件序号（no）恢复指定文件\n");
-            printf("========================================\n");
-            printf("请输入命令对应数字:");
-            scanf("%s", &value);    
-            printf("========================================\n");
-            switch (atoi(&value))
-            {
-                case 1:
-                    sprintf(Send_buffer, "datarec$action=get$command=Help");
-                    break;
-                case 2:
-                    sprintf(Send_buffer, "datarec$action=set$command=DiskList");
-                    break;
-                case 3:
-                    sprintf(Send_buffer, "datarec$action=get$command=DiskList");
-                    break;
-                case 4:
-                    printf("请输入物理磁盘序号(no):");
-                    scanf("%d", &physical_Disk_No);    
-                    printf("请输入逻辑磁盘序号（no）:");
-                    scanf("%d", &logical_Disk_No);    
-                    sprintf(Send_buffer, "datarec$action=set$command=FileList$param=0&param=%d&param=%d", physical_Disk_No, logical_Disk_No);
-                    break;
-                case 5:
-                    printf("请输入物理磁盘序号(no):");
-                    scanf("%d", &physical_Disk_No);    
-                    printf("请输入逻辑磁盘序号（no）:");
-                    scanf("%d", &logical_Disk_No);    
-                    sprintf(Send_buffer, "datarec$action=set$command=FileList$param=1&param=%d&param=%d", physical_Disk_No, logical_Disk_No);
-                    break;
-                case 6:
-                    sprintf(Send_buffer, "datarec$action=get$command=FileList");
-                    break;
-                case 7:
-                    printf("请输入页数:");
-                    scanf("%d", &page_No);    
-                    sprintf(Send_buffer, "datarec$action=get$command=FileList$param=0&param=%d", page_No);
-                    break;
-                case 8:
-                    sprintf(Send_buffer, "datarec$action=get$command=FileList$param=1");
-                    break;
-                case 9:
-                    sprintf(Send_buffer, "datarec$action=get$command=FileList$param=2");
-                    break;
-                case 10:
-                    sprintf(Send_buffer, "datarec$action=set$command=File");
-                    break;
-                case 11:
-                    printf("请输入文件序号:");
-                    scanf("%d", &file_No);    
-                    sprintf(Send_buffer, "datarec$action=get$command=File$param=%d", file_No);
-                    break;
-            }
-            printf("[Data Send]\n%s\n", Send_buffer);
-            mg_websocket_client_write(client_conn,
-                                      MG_WEBSOCKET_OPCODE_TEXT,
-                                      Send_buffer,
-                                      strlen(Send_buffer));
-            get_Response = false;
+            case 1:
+                sprintf(Send_buffer, "datarec$action=get$command=info");
+                break;
+            case 2:
+                sprintf(Send_buffer, "datarec$action=set$command=disk");
+                break;
+            case 3:
+                sprintf(Send_buffer, "datarec$action=get$command=disk");
+                break;
+            case 4:
+                printf("请输入物理磁盘序号(no):");
+                scanf("%d", &physical_Disk_No);    
+                printf("请输入逻辑磁盘序号（no）:");
+                scanf("%d", &logical_Disk_No);    
+                sprintf(Send_buffer, "datarec$action=set$command=scan$param=0&param=%d&param=%d", physical_Disk_No, logical_Disk_No);
+                break;
+            case 5:
+                printf("请输入物理磁盘序号(no):");
+                scanf("%d", &physical_Disk_No);    
+                printf("请输入逻辑磁盘序号（no）:");
+                scanf("%d", &logical_Disk_No);    
+                sprintf(Send_buffer, "datarec$action=set$command=scan$param=1&param=%d&param=%d", physical_Disk_No, logical_Disk_No);
+                break;
+            case 6:
+                sprintf(Send_buffer, "datarec$action=set$command=scan$param=2");
+                break;
+            case 7:
+                sprintf(Send_buffer, "datarec$action=get$command=scan$param=0");
+                break;
+            case 8:
+                sprintf(Send_buffer, "datarec$action=get$command=scan$param=0&param=0");
+                break;
+            case 9:
+                sprintf(Send_buffer, "datarec$action=get$command=scan$param=0&param=1");
+                break;
+            case 10:
+                printf("请输入页数:");
+                scanf("%d", &page_No);    
+                sprintf(Send_buffer, "datarec$action=get$command=scan$param=0&param=2&param=%d", page_No);
+                break;
+            case 11:
+                printf("请输入文件拓展名:");
+                scanf("%s", (char *)&file_Extension);    
+                printf("请输入是否启用（0：禁用/1：启用）:");
+                scanf("%d", &file_Extension_Enable);    
+                sprintf(Send_buffer, "datarec$action=set$command=scan$param=3&param=%s&param=%d", file_Extension, file_Extension_Enable);
+                break;
+            case 12:
+                printf("请输入文件编号(no):");
+                scanf("%d", &file_No);    
+                sprintf(Send_buffer, "datarec$action=get$command=recovery$param=%d", page_No); 
+                break;
+            case 13:
+                printf("请输入文件恢复路径:");
+                scanf("%s", (char *)&file_Recovery_Path);    
+                sprintf(Send_buffer, "datarec$action=set$command=recovery$param=%s", file_Recovery_Path);
+                break;
+            case 14:
+                sprintf(Send_buffer, "datarec$action=exit");
+                break;
+            default:
+                sprintf(Send_buffer, "datarec$action=get$command=info");
+                break;
         }
+        printf("[Request Send]\n%s\n", Send_buffer);
+        mg_websocket_client_write(client_conn,
+                MG_WEBSOCKET_OPCODE_TEXT,
+                Send_buffer,
+                strlen(Send_buffer));
     }
 
     free(Send_buffer);

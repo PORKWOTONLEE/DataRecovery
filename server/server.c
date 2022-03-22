@@ -1,4 +1,5 @@
 #include <stdlib.h>
+#include <stdbool.h>
 #include <string.h>
 #include "./cjson/include/cJSON.h"
 #include "./civetweb/include/civetweb.h"
@@ -106,7 +107,7 @@ int WS_Data_Handler(struct mg_connection *conn,
 	       ws_Cli_Ctx->connectionNumber);
 
     // Websocket数据处理
-    Data_Handler(conn, opcode, data, datasize);
+    Request_Handler(conn, opcode, data, datasize);
 
 	return 1;
 }

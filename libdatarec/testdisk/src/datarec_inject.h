@@ -90,10 +90,11 @@
 #include "askloc.h"
 #include "setdate.h"
 #include "datarec_inject.h"
+#include "../../../log/log.h"
 #include "../../../common.h"
 
-int Quick_Scan_File(char *error_Buffer, ntfs_volume *vol, file_info_t *dir_list);
-int Deep_Scan_File(char* error_Buffer, struct ph_param *params, const struct ph_options *options, alloc_data_t *list_search_space);
+int Quick_Scan_File(ntfs_volume *vol, file_info_t *dir_list);
+int Deep_Scan_File(testdisk_Context *testdisk_Ctx);
 
 #endif
 
