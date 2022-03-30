@@ -2,10 +2,10 @@
 
 ROOT_DIR=`pwd`
 LIB_DIR="${ROOT_DIR}/lib"
-NTFSPROGS_DIR="${ROOT_DIR}/ntfsprogs"
+NTFSPROGS_DIR="${ROOT_DIR}/3rd_lib_src/ntfsprogs"
 TESTDISK_DIR="${ROOT_DIR}/testdisk"
 
-TESTDISK_CONFIGURE="./configure --with-ntfs-includes=../ntfsprogs/include --with-ntfs-lib=../ntfsprogs/libntfs/.libs --with-jpeg-includes=../libjpeg/include --with-jpeg-lib=../libjpeg/lib --with-ewf-includes=../libewf/include --with-ewf-lib=../libewf/lib --enable-missing-uuid-ok --without-ncurses --disable-qt"
+TESTDISK_CONFIGURE="./configure --with-ntfs-includes=../3rd_lib/ntfsprogs/include --with-ntfs-lib=../3rd_lib/ntfsprogs/lib --with-jpeg-includes=../3rd_lib/libjpeg/include --with-jpeg-lib=../3rd_lib/libjpeg/lib --with-ewf-includes=../3rd_lib/libewf/include --with-ewf-lib=../3rd_lib/libewf/lib --enable-missing-uuid-ok --without-ncurses --disable-qt"
 
 # 文件存在判断
 function FileExist() 

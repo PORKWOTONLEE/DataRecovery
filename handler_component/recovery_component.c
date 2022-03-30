@@ -3,7 +3,7 @@
 #include "../common.h"
 #include "../log/log.h"
 #include "../libdatarec/include/dir_common.h"
-#include "../libdatarec/ntfsprogs/include/ntfs/volume.h"
+#include "../libdatarec/3rd_lib/ntfsprogs/include/ntfs/volume.h"
 #include "../libdatarec/include/datarec_inject.h"
 
 #define HAVE_LIBNTFS 1

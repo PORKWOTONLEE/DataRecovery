@@ -12,7 +12,7 @@
 #include "../libdatarec/include/dir_common.h"
 #include "../libdatarec/include/filegen.h"
 #include "../libdatarec/include/photorec.h"
-#include "../libdatarec/ntfsprogs/include/ntfs/volume.h"
+#include "../libdatarec/3rd_lib/ntfsprogs/include/ntfs/volume.h"
 #include "../libdatarec/include/datarec_inject.h"
 #include "../common.h"
 #include "../log/log.h"
@@ -73,74 +73,6 @@ static error_Code Read_Partition_Data(void)
     return ERROR_NONE_OK;
 }
 
-static int Update_DataRec_Ctx(void)
-{
-    testdisk_File_Context *testdisk_File_Ctx = g_my_Data_Ctx->testdisk_Ctx->testdisk_File_Ctx;
-    data_Recovery_Context *data_Rec_Ctx = g_my_Data_Ctx->data_Rec_Ctx;
-    const struct td_list_head *file_walker = NULL;
-    unsigned int i = 0;
-
-    if ((NULL!=data_Rec_Ctx) &&
-        (NULL!=data_Rec_Ctx->file_Ctx))
-    {
-        // 遍历文件夹
-        td_list_for_each(file_walker, &testdisk_File_Ctx->list.list)
-        {
-            const file_info_t *file_info = td_list_entry_const(file_walker, const file_info_t, list);
-
-            // 如果文件状态不是删除，则跳过
-            if (0 != (file_info->status & FILE_STATUS_DELETED))
-            {
-                continue;
-            }
-            else if (i > FILE_NUM)
-            {
-                break;
-            }
-
-            // 更新文件序号
-            data_Rec_Ctx->file_Ctx->info[i].no = i;
-
-            // 更新文件名称
-            strcpy(data_Rec_Ctx->file_Ctx->info[i].name, file_info->name);
-
-            // 更新文件大小
-            data_Rec_Ctx->file_Ctx->info[i].size = file_info->st_size;
-
-            // 更新文件inode
-            data_Rec_Ctx->file_Ctx->info[i].inode = (uint64_t)file_info->st_ino;
-
-            // 更新文件上次访问时间
-            data_Rec_Ctx->file_Ctx->info[i].last_Access_Time = file_info->td_atime;
-
-            // 更新文件上次修改时间
-            data_Rec_Ctx->file_Ctx->info[i].last_Modify_Time = file_info->td_mtime;
-
-            // 更新文件上次改变时间
-            data_Rec_Ctx->file_Ctx->info[i].last_Change_Time = file_info->td_ctime;
-
-            ++i;
-        }
-
-        // 更新文件总数
-        data_Rec_Ctx->file_Ctx->total_Num = i;
-
-        // 更新文件总页数/每页10个文件
-        data_Rec_Ctx->file_Ctx->total_Page = (0 == i%10)?(i/10):(i/10+1);
-
-        // 更新文件当前页数
-        data_Rec_Ctx->file_Ctx->current_Page = 0;
-
-        return ERROR_NONE_OK;
-    }
-    else
-    {
-        Set_Respond_Buffer("data_Rec_Ctx/file_Ctx Is Null Pointer");
-
-        return ERROR_COMMON_ERROR;
-    }
-}
-
 static error_Code Check_Partiton_Need_Redir(error_Code (* Read_Partition_Data)(void))
 {
     if (Get_Scan_Partition()->sb_offset!=0 && Get_Scan_Partition()->sb_size>0)
@@ -186,10 +118,65 @@ static error_Code Check_Partiton_Need_Redir(error_Code (* Read_Partition_Data)(v
     }
 }
 
-static error_Code Update_Testdisk_Ctx(void)
+static int Update_DataRec_Ctx(void)
 {
-    return Check_Partiton_Need_Redir(Read_Partition_Data);
+    testdisk_File_Context *testdisk_File_Ctx = g_my_Data_Ctx->testdisk_Ctx->testdisk_File_Ctx;
+    data_Recovery_Context *data_Rec_Ctx = g_my_Data_Ctx->data_Rec_Ctx;
+    const struct td_list_head *file_walker = NULL;
+    unsigned int i = 0;
+
+    if ((NULL!=data_Rec_Ctx) &&
+        (NULL!=data_Rec_Ctx->file_Ctx))
+    {
+        // 遍历文件夹
+        td_list_for_each(file_walker, &testdisk_File_Ctx->list.list)
+        {
+            const file_info_t *file_info = td_list_entry_const(file_walker, const file_info_t, list);
+
+            // 如果文件状态不是删除，则跳过
+            if (0 != (file_info->status & FILE_STATUS_DELETED))
+            {
+                continue;
+            }
+            else if (i > FILE_NUM)
+            {
+                break;
+            }
+
+            // 更新文件序号
+            data_Rec_Ctx->file_Ctx->info[i].no = i;
+
+            // 更新文件名称
+            strcpy(data_Rec_Ctx->file_Ctx->info[i].name, file_info->name);
+
+            // 更新文件大小
+            data_Rec_Ctx->file_Ctx->info[i].size = file_info->st_size;
+
+            // 更新文件inode
+            data_Rec_Ctx->file_Ctx->info[i].inode = (uint64_t)file_info->st_ino;
+
+            ++i;
+        }
+
+        // 更新文件总数
+        data_Rec_Ctx->file_Ctx->total_Num = i;
+
+        // 更新文件总页数/每页10个文件
+        data_Rec_Ctx->file_Ctx->total_Page = (0 == i%10)?(i/10):(i/10+1);
+
+        // 更新文件当前页数
+        data_Rec_Ctx->file_Ctx->current_Page = 0;
+
+        return ERROR_NONE_OK;
+    }
+    else
+    {
+        Set_Respond_Buffer("data_Rec_Ctx/file_Ctx Is Null Pointer");
+
+        return ERROR_COMMON_ERROR;
+    }
 }
+
 
 static error_Code Page_Control(void)
 {
@@ -471,7 +458,7 @@ static void Quick_Scan_File_With_Param(void)
     Set_Quick_Scan_File_List_Available(LIST_NOT_READY);
     Set_Control(SCAN_CONTINUE);
 
-    Update_Testdisk_Ctx();
+    Check_Partiton_Need_Redir(Read_Partition_Data);
     Set_Percent(50.0);
 
     // 判断扫描停止后，提前终止线程
@@ -549,9 +536,30 @@ static error_Code Scan_File_BackGround(void (* Scan_File_Function)(void))
     }
 }
 
+static error_Code Check_Partition_Type(void)
+{
+    if(Get_Scan_Partition()->upart_type==UP_NTFS ||
+            (is_part_ntfs(Get_Scan_Partition()) && 
+             Get_Scan_Partition()->upart_type!=UP_EXFAT))
+    {
+        return ERROR_NONE_OK;
+    }
+    else
+    {
+        Set_Respond_Buffer("Unsupport Filesystem");
+
+        return ERROR_COMMON_ERROR;
+    }
+}
+
 static error_Code Start_QuickScan_File(void)
 {
     if (ERROR_COMMON_ERROR == Scan_Object_Context_Init(1, 2))
+    {
+        return ERROR_COMMON_ERROR;
+    }
+
+    if (ERROR_COMMON_ERROR == Check_Partition_Type())
     {
         return ERROR_COMMON_ERROR;
     }
